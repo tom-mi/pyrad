@@ -105,6 +105,37 @@ class EncodingTests(unittest.TestCase):
     def testUnknownTypeDecoding(self):
         self.assertRaises(ValueError, tools.DecodeAttr, 'unknown', None)
 
+    def testDecodeTaggedAttr(self):
+        self.assertEqual(
+            tools.DecodeTaggedAttr('octets', six.b('\x00123')),
+            (0, six.b('123')))
+        self.assertEqual(
+            tools.DecodeTaggedAttr('octets', six.b('\x01\x02\x03')),
+            (1, six.b('\x02\x03')))
+        self.assertEqual(
+            tools.DecodeTaggedAttr('octets', six.b('\x1F\x02\x03')),
+            (31, six.b('\x02\x03')))
+        # Invalid tunnel tag (>32)
+        self.assertRaises(ValueError, tools.DecodeTaggedAttr,
+                          'octets', six.b('\x20\x02\x03'))
+
+    def testDecodeTaggedAttrInt(self):
+        # Test for correct handling of tagged integers (tag + 3 octets)
+        self.assertEqual(
+            tools.DecodeTaggedAttr('integer', six.b('\x01\x02\x03\x04')),
+            (1, six.b('\x00\x02\x03\x04')))
+
+    def testEncodeTaggedAttr(self):
+        self.assertEqual(
+            tools.EncodeTaggedAttr('octets', 1, six.b('123')),
+            six.b('\x01123'))
+        self.assertEqual(
+            tools.EncodeTaggedAttr('octets', 31, six.b('\x07\x08')),
+            six.b('\x1F\x07\x08'))
+        self.assertEqual(
+            tools.EncodeTaggedAttr('octets', 0, '\x02\x03\x05'),
+            six.b('\x00\x02\x03\x05'))
+
     def testEncodeFunction(self):
         self.assertEqual(
                 tools.EncodeAttr('string', six.u('string')),

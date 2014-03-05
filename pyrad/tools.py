@@ -85,6 +85,35 @@ def DecodeDate(num):
     return (struct.unpack('!I', num))[0]
 
 
+def DecodeTaggedAttr(datatype, value):
+    # NOTE: According to RFC 2865, if the first byte (the tunnel tag field) is
+    # NOTE: not between 0..32, it SHOULD be interpreted as first byte of the
+    # NOTE: following string (for string fields) or ignored (for tunnel
+    # NOTE: password field). This behavior is not yet implemented.
+    (tag,) = struct.unpack('B', value[0:1])
+    if (tag <= 0x1F):
+        value = value[1:]
+        if datatype == 'integer':
+            # Tagged integer fields have only 3 octets => pad with one octet.
+            # See RFC 2865 for details.
+            value = six.b('\x00') + value
+            assert len(value) == 4
+        return (tag, value)
+    else:
+        msg = ('Tunnel-Tag must be a value between 0..32. Exceptions for '
+               'string fields (see RFC 2865) are not yet implemented.')
+        raise ValueError(msg)
+
+
+def EncodeTaggedAttr(datatype, tag, value):
+    if datatype == 'integer':
+        # Tagged integer fields have only 3 octets => pad with one octet.
+        # See RFC 2865 for details.
+        value = value[1:]
+        assert len(value) == 3
+    return EncodeInteger(tag, 'B') + value
+
+
 def EncodeAttr(datatype, value):
     if datatype == 'string':
         return EncodeString(value)
@@ -133,3 +162,16 @@ def DecodeAttr(datatype, value):
         return DecodeIPv6Prefix(value)
     else:
         raise ValueError('Unknown attribute type %s' % datatype)
+
+
+def XorBytes(bytes1, bytes2):
+    '''Xor two bytestrings.'''
+    assert len(bytes1) == len(bytes2)
+    result = six.b('')
+    if six.PY3:
+        for b1, b2 in zip(bytes1, bytes2):
+            result += bytes((b1 ^ b2,))
+    else:
+        for b1, b2 in zip(bytes1, bytes2):
+            result += chr(ord(b1) ^ ord(b2))
+    return result

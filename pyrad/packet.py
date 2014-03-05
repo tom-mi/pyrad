@@ -111,16 +111,38 @@ class Packet(dict):
                       **attributes)
 
     def _DecodeValue(self, attr, value):
+        if attr.has_tag:
+            # Remove tag prefix if present
+            tag, value = tools.DecodeTaggedAttr(attr.type, value)
         if attr.values.HasBackward(value):
-            return attr.values.GetBackward(value)
+            decoded_value = attr.values.GetBackward(value)
+        elif attr.encrypt == 1:
+            decoded_value = tools.DecodeOctets(value)
+        elif attr.encrypt == 2:
+            decoded_value = tools.DecodeOctets(value)
         else:
-            return tools.DecodeAttr(attr.type, value)
+            decoded_value = tools.DecodeAttr(attr.type, value)
+        if attr.has_tag:
+            return (tag, decoded_value)
+        else:
+            return decoded_value
+
 
     def _EncodeValue(self, attr, value):
+        if attr.has_tag:
+            if isinstance(value, tuple):
+                tag, value = value
+            else:
+                tag = 0x00
         if attr.values.HasForward(value):
-            return attr.values.GetForward(value)
+            encoded_value = attr.values.GetForward(value)
         else:
-            return tools.EncodeAttr(attr.type, value)
+            encoded_value =  tools.EncodeAttr(attr.type, value)
+        if attr.has_tag:
+            # Always prefix with tag for tagged attribute (0 if not present)
+            return tools.EncodeTaggedAttr(attr.type, tag, encoded_value)
+        else:
+            return encoded_value
 
     def _EncodeKeyValues(self, key, values):
         if not isinstance(key, str):
@@ -449,6 +471,59 @@ class AuthPacket(Packet):
             buf = buf[16:]
 
         return result
+
+    def TunnelPwDecrypt(self, encrypted):
+        '''
+        Decrypt Tunnel Password (RFC 2868).
+
+        This method must be called on the request packet, as the request
+        authenticator is used to encrypt the tunnel password.
+        '''
+        if not (isinstance(encrypted, bytes)):
+            raise ValueError('Encrypted block must be bytestring.')
+        salt = encrypted[0:2]
+        ciphertext = encrypted[2:]
+        if not 0x80 & six.byte2int(salt):
+            raise ValueError('Leftmost bit of salt must be set.')
+        assert len(salt) == 2
+        assert len(ciphertext) % 16 == 0
+        last = self.secret + self.authenticator + salt
+        plaintext = six.b('')
+        for i in range(len(ciphertext) // 16):
+            block_cipher = md5_constructor(last).digest()
+            plaintext += tools.XorBytes(ciphertext[i*16:(i+1)*16],
+                                        block_cipher)
+            last = self.secret + ciphertext[i*16:(i+1)*16]
+        length = struct.unpack('B', plaintext[0:1])[0]
+        return plaintext[1:length+1]
+
+    def TunnelPwCrypt(self, salt, password):
+        '''
+        Encrypt Tunnel Password (RFC 2868).
+
+        This method must be called on the request packet, as the request
+        authenticator is used to encrypt the tunnel password.
+        '''
+        if not (isinstance(salt, bytes) and len(salt) == 2):
+            raise ValueError('Salt must be bytestring of length 2.')
+        if not 0x80 & six.byte2int(salt):
+            raise ValueError('Leftmost bit of salt must be set.')
+        assert len(password) <= 255
+
+        if isinstance(password, six.text_type):
+            password = password.encode('utf-8')
+
+        plaintext = six.b(chr(len(password))) + password
+        if not len(plaintext) % 16 == 0:
+            plaintext += six.b('\x00') * (16 - (len(plaintext) % 16))
+        last = self.secret + self.authenticator + salt
+        ciphertext = six.b('')
+        for i in range(len(plaintext) // 16):
+            block_cipher = md5_constructor(last).digest()
+            ciphertext += tools.XorBytes(plaintext[i*16:(i+1)*16],
+                                         block_cipher)
+            last = self.secret + ciphertext[-16:]
+        return ciphertext
 
 
 class AcctPacket(Packet):

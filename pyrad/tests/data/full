@@ -3,12 +3,19 @@
 ATTRIBUTE  Test-String       1       string
 ATTRIBUTE  Test-Octets       2       octets
 ATTRIBUTE  Test-Integer      3       integer
+ATTRIBUTE  Test-Password     4       string encrypt=1
+ATTRIBUTE  Test-Tunnel-Int   5       integer has_tag
+ATTRIBUTE  Test-Tunnel-Str   6       string has_tag
+ATTRIBUTE  Test-Tunnel-Pwd   7       string has_tag,encrypt=2
 
 VALUE      Test-Integer      Zero    0
 VALUE      Test-Integer      One     1
 VALUE      Test-Integer      Two     2
 VALUE      Test-Integer      Three   3
 VALUE      Test-Integer      Four    4
+
+VALUE      Test-Tunnel-Int   Zero    0
+VALUE      Test-Tunnel-Int   One     1
 
 VENDOR Simplon 16
 

@@ -302,6 +302,33 @@ class PacketTests(unittest.TestCase):
         self.packet.AddAttribute(1, 1)
         self.assertEqual(dict.__getitem__(self.packet, 1), [1, 1])
 
+    def testTunnelAttributeInt(self):
+        # The tunnel tag is written in the first octet of the int, meaning
+        # there are only 3 octets remaining for the value itself.
+        self.packet['Test-Tunnel-Int'] = (1, 5)
+        self.assertEqual(self.packet['Test-Tunnel-Int'], [(1, 5)])
+        self.assertEqual(self.packet[5], [six.b('\x01\x00\x00\x05')])
+
+    def testTunnelAttributeEncodeNoTag(self):
+        self.packet['Test-Tunnel-Int'] = 5
+        self.assertEqual(self.packet['Test-Tunnel-Int'], [(0, 5)])
+        self.assertEqual(self.packet[5], [six.b('\x00\x00\x00\x05')])
+
+    def testTunnelAttributeDecodeNoTag(self):
+        self.packet.DecodePacket(
+            six.b('\x01\x02\x00\x1a1234567890123456\x05\x06\x20\x00\x00\x00'))
+        self.assertRaises(ValueError, self.packet.__getitem__,
+                          'Test-Tunnel-Int')
+
+    def testTunnelAttributeBackward(self):
+        self.packet['Test-Tunnel-Int'] = (1, 1)
+        self.assertEqual(self.packet['Test-Tunnel-Int'], [(1, 'One')])
+
+    def testTunnelAttributeForward(self):
+        self.packet['Test-Tunnel-Int'] = (1, 'Zero')
+        self.assertEqual(self.packet[5], [six.b('\x01\x00\x00\x00')])
+        self.assertEqual(self.packet['Test-Tunnel-Int'], [(1, 'Zero')])
+
 
 class AuthPacketConstructionTests(PacketConstructionTests):
     klass = packet.AuthPacket
@@ -347,6 +374,34 @@ class AuthPacketTests(unittest.TestCase):
         self.assertEqual(self.packet.PwCrypt('Simplon'),
                 six.b('\xd3U;\xb23\r\x11\xba\x07\xe3\xa8*\xa8x\x14\x01'))
 
+    def testTunnelPwCrypt(self):
+        self.assertEqual(
+            self.packet.TunnelPwCrypt(six.b('\x80\x01'), 'test'),
+            six.b(':i\x0bw\x84Ys!\x99X\x8f\xde\x80n\x14\xc2'))
+        self.assertEqual(
+            self.packet.TunnelPwCrypt(six.b('\x80\x02'), 'verylongpassword'),
+            six.b('\xdcb\xe9\x84\x01bf\x8f\x05G\xfe\xb4\x07\xe0(A'
+                  '\x9ej\xcc\xb0:c\xe4\x9e\xad\r\xb79\xe8\xa2E~'))
+        self.assertEqual(
+            self.packet.TunnelPwCrypt(six.b('\x80\x03'),
+                six.b('b\x01narytest')),
+            six.b('\x12(\xaeK\xc6[gq\x1ea\xd7700$\xdc'))
+
+    def testTunnelPwDecrypt(self):
+        self.assertEqual(
+            self.packet.TunnelPwDecrypt(
+                six.b('\x80\x01:i\x0bw\x84Ys!\x99X\x8f\xde\x80n\x14\xc2')),
+            six.u('test'))
+        self.assertEqual(
+            self.packet.TunnelPwDecrypt(
+            six.b('\x80\x02\xdcb\xe9\x84\x01bf\x8f\x05G\xfe\xb4\x07\xe0(A'
+                  '\x9ej\xcc\xb0:c\xe4\x9e\xad\r\xb79\xe8\xa2E~')),
+            six.u('verylongpassword'))
+        self.assertEqual(
+            self.packet.TunnelPwDecrypt(
+                six.b('\x80\x03\x12(\xaeK\xc6[gq\x1ea\xd7700$\xdc')),
+            six.u('b\x01narytest'))
+
     def testPwCryptSetsAuthenticator(self):
         self.packet.authenticator = None
         self.packet.PwCrypt(six.u(''))
@@ -359,6 +414,38 @@ class AuthPacketTests(unittest.TestCase):
         self.assertEqual(self.packet.PwDecrypt(
                 six.b('\xd3U;\xb23\r\x11\xba\x07\xe3\xa8*\xa8x\x14\x01')),
                 six.u('Simplon'))
+
+
+class AuthPacketPasswordTest(unittest.TestCase):
+
+    def setUp(self):
+        self.path = os.path.join(home, 'tests', 'data')
+        self.dict = Dictionary(os.path.join(self.path, 'full'))
+        self.packet = packet.AuthPacket(id=0, secret=six.b('secret'),
+                authenticator=six.b('01234567890ABCDEF'), dict=self.dict)
+        self.packet['Test-Password'] = self.packet.PwCrypt('test')
+
+    def testPasswordAttribute(self):
+        self.assertEqual(
+            self.packet['Test-Password'],
+            [b'\xf4Y%\xb6_b\x7f\xba\x07\xe3\xa8*\xa8x\x14\x01'])
+
+
+class TunnelPasswordTest(unittest.TestCase):
+    '''Tests regarding encrypted tunnel passwords (RFC 2868).'''
+
+    def setUp(self):
+        self.path = os.path.join(home, 'tests', 'data')
+        self.dict = Dictionary(os.path.join(self.path, 'full'))
+        self.packet = packet.AuthPacket(id=0, secret=six.b('secret'),
+            authenticator=six.b('01234567890ABCDEF'), dict=self.dict)
+        self.packet['Test-Tunnel-Pwd'] = \
+            (1, self.packet.TunnelPwCrypt('\x80\x01', 'test'))
+
+    def testEncryptedAttribute(self):
+        '''Return encrypted tunnel password as bytestring.'''
+        self.assertEqual(self.packet['Test-Tunnel-Pwd'],
+            [(1, six.b(':i\x0bw\x84Ys!\x99X\x8f\xde\x80n\x14\xc2'))])
 
 
 class AcctPacketConstructionTests(PacketConstructionTests):
