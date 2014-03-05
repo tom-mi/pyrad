@@ -80,7 +80,7 @@ class DictionaryParsingTests(unittest.TestCase):
         self.assertEqual(len(dict), 2)
 
     def testParseSimpleDictionary(self):
-        self.assertEqual(len(self.dict), 8)
+        self.assertEqual(len(self.dict), 10)
         values = [
                 ('Test-String', 1, 'string'),
                 ('Test-Octets', 2, 'octets'),
@@ -90,6 +90,8 @@ class DictionaryParsingTests(unittest.TestCase):
                 ('Test-If-Id', 6, 'ifid'),
                 ('Test-Date', 7, 'date'),
                 ('Test-Abinary', 8, 'abinary'),
+                ('Test-Short', 9, 'short'),
+                ('Test-Integer64', 10, 'integer64'),
                 ]
 
         for (attr, code, type) in values:

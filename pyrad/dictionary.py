@@ -31,18 +31,20 @@ The commands supported are::
 
 The datatypes currently supported are:
 
-=======   ======================
-type      description
-=======   ======================
-string    ASCII string
-ipaddr    IPv4 address
-signed    32 bits signed number
-integer   32 bits unsigned number
-short     16 bits unsigned number
-byte      8 bits unsigned number
-date      32 bits UNIX timestamp
-octets    arbitrary binary data
-=======   ======================
+==========   ===============================================
+type         description
+==========   ===============================================
+string       ASCII string
+ipaddr       IPv4 address
+signed       32 bits signed number
+integer      32 bits unsigned number
+integer64    64 bits unsigned number
+short        16 bits unsigned number
+byte         8 bits unsigned number
+date         32 bits UNIX timestamp
+octets       arbitrary binary data
+ipv6prefix   IPv6 network prefix (requires ipaddress module)
+==========   ===============================================
 
 These datatypes are parsed but not supported:
 
@@ -57,8 +59,6 @@ These datatypes are parsed but not supported:
 +------------+----------------------------------------------+
 | ipv6addr   | 16 octets in network byte order              |
 +------------+----------------------------------------------+
-| ipv6prefix | 18 octets in network byte order              |
-+------------+----------------------------------------------+
 | ether      | 6 octets of hh:hh:hh:hh:hh:hh                |
 |            | where 'h' is hex digits, upper or lowercase. |
 +------------+----------------------------------------------+
@@ -72,9 +72,10 @@ from pyrad import tools
 from pyrad import dictfile
 from copy import copy
 
-DATATYPES = frozenset(['string', 'ipaddr', 'integer', 'signed', 'date',
-                       'octets', 'abinary', 'tlv', 'ipv6addr', 'combo-ip',
-                       'ipv6prefix', 'ifid', 'ether', 'short', 'byte'])
+DATATYPES = frozenset(['string', 'ipaddr', 'integer', 'integer64', 'signed',
+                       'date', 'octets', 'abinary', 'tlv', 'ipv6addr',
+                       'combo-ip', 'ipv6prefix', 'ifid', 'ether', 'short',
+                       'byte'])
 
 
 class ParseError(Exception):

@@ -2,6 +2,11 @@ import unittest
 import six
 from pyrad import tools
 
+try:
+    import ipaddress
+except ImportError:
+    ipaddress = None
+
 
 class EncodingTests(unittest.TestCase):
     def testStringEncoding(self):
@@ -55,6 +60,40 @@ class EncodingTests(unittest.TestCase):
                 tools.DecodeInteger(six.b('\x01\x02\x03\x04')),
                 0x01020304)
 
+    @unittest.skipUnless(ipaddress, 'Requires ipaddress module.')
+    def testIPv6PrefixDecoding(self):
+        self.assertEqual(
+            tools.DecodeIPv6Prefix(
+                six.b('\x00\x40\x20\x01\x0d\xb8\x3c\x4d\x00\x15')),
+            ipaddress.IPv6Network(six.u('2001:db8:3c4d:15::/64')))
+        self.assertEqual(
+            tools.DecodeIPv6Prefix(
+                six.b('\x00\x38\x20\x01\x0d\xb8\x3c\x4d\x15')),
+            ipaddress.IPv6Network(six.u('2001:db8:3c4d:1500::/56')))
+        self.assertEqual(
+            tools.DecodeIPv6Prefix(
+                six.b('\x00\x80\x20\x01\x0d\xb8\x85\xa3\x08\xd3'
+                      '\x13\x19\x8a\x2e\x03\x70\x73\x48')),
+            ipaddress.IPv6Network(
+                six.u('2001:db8:85a3:8d3:1319:8a2e:370:7348/128')))
+
+    @unittest.skipUnless(ipaddress, 'Requires ipaddress module.')
+    def testIPv6PrefixEncoding(self):
+        self.assertEqual(
+            tools.EncodeIPv6Prefix(
+                ipaddress.IPv6Network(six.u('2001:db8:3c4d:15::/64'))),
+            six.b('\x00\x40\x20\x01\x0d\xb8\x3c\x4d\x00\x15'))
+        self.assertEqual(
+            tools.EncodeIPv6Prefix(
+                ipaddress.IPv6Network(six.u('2001:db8:3c4d:1500::/56'))),
+            six.b('\x00\x38\x20\x01\x0d\xb8\x3c\x4d\x15'))
+        self.assertEqual(
+            tools.EncodeIPv6Prefix(
+                ipaddress.IPv6Network(
+                    six.u('2001:db8:85a3:8d3:1319:8a2e:370:7348/128'))),
+            six.b('\x00\x80\x20\x01\x0d\xb8\x85\xa3\x08\xd3'
+                  '\x13\x19\x8a\x2e\x03\x70\x73\x48'))
+
     def testDateDecoding(self):
         self.assertEqual(
                 tools.DecodeDate(six.b('\x01\x02\x03\x04')),
@@ -82,6 +121,17 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(
                 tools.EncodeAttr('date', 0x01020304),
                 six.b('\x01\x02\x03\x04'))
+        self.assertEqual(
+                tools.EncodeAttr('integer64', 0x0102030405060708),
+                six.b('\x01\x02\x03\x04\x05\x06\x07\x08'))
+
+    @unittest.skipUnless(ipaddress, 'Requires ipaddress module.')
+    def testEncodeFunctionIP(self):
+        self.assertEqual(
+            tools.EncodeAttr(
+                'ipv6prefix',
+                ipaddress.IPv6Network(six.u('2001:db8:1234::/48'))),
+            six.b('\x00\x30\x20\x01\x0d\xb8\x12\x34'))
 
     def testDecodeFunction(self):
         self.assertEqual(
@@ -99,3 +149,14 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(
                 tools.DecodeAttr('date', six.b('\x01\x02\x03\x04')),
                 0x01020304)
+        self.assertEqual(
+                tools.DecodeAttr('integer64',
+                                 six.b('\x01\x02\x03\x04\x05\x06\x07\x08')),
+                0x0102030405060708)
+
+    @unittest.skipUnless(ipaddress, 'Requires ipaddress module.')
+    def testDecodeFunctionIP(self):
+        self.assertEqual(
+            tools.DecodeAttr(
+                'ipv6prefix', six.b('\x00\x30\x20\x01\x0d\xb8\x12\x34')),
+            ipaddress.IPv6Network(six.u('2001:db8:1234::/48')))

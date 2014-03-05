@@ -4,7 +4,6 @@
 import struct
 import six
 
-
 def EncodeString(str):
     if len(str) > 253:
         raise ValueError('Can only encode strings of <= 253 characters')
@@ -25,6 +24,18 @@ def EncodeAddress(addr):
         raise TypeError('Address has to be a string')
     (a, b, c, d) = map(int, addr.split('.'))
     return struct.pack('BBBB', a, b, c, d)
+
+
+def EncodeIPv6Prefix(prefix):
+    try:
+        import ipaddress
+    except ImportError:
+        raise Exception('ipaddress module is required for IPv6Prefix support')
+    if not isinstance(prefix, ipaddress.IPv6Network):
+        raise TypeError('IPv6Prefix has to be a ipaddress.IPv6Network')
+    octets = (prefix.prefixlen - 1) // 8 + 1
+    return (struct.pack('BB', 0, prefix.prefixlen) +
+            prefix.network_address.packed[0:octets])
 
 
 def EncodeInteger(num, fmt='!I'):
@@ -50,6 +61,21 @@ def DecodeOctets(str):
 def DecodeAddress(addr):
     return '.'.join(map(str, struct.unpack('BBBB', addr)))
 
+def DecodeIPv6Prefix(value):
+    try:
+        import ipaddress
+    except ImportError:
+        raise Exception('ipaddress module is required for IPv6Prefix support')
+    _, prefixlen = struct.unpack('BB', value[0:2])
+    assert prefixlen <= 128
+    if len(value[2:]) % 2 == 1:  # pad last incomplete block with zero
+        value += chr(0)
+    fmt = '!' + ('H' * (len(value[2:]) / 2))
+    blocks = ['0'] * 8
+    for index, block in enumerate(struct.unpack(fmt, value[2:])):
+        blocks[index] = six.u('{:x}').format(block)
+    prefix = six.u(':').join(blocks)
+    return ipaddress.IPv6Network(six.u('{}/{}').format(prefix, prefixlen))
 
 def DecodeInteger(num, fmt='!I'):
     return (struct.unpack(fmt, num))[0]
@@ -68,6 +94,8 @@ def EncodeAttr(datatype, value):
         return EncodeAddress(value)
     elif datatype == 'integer':
         return EncodeInteger(value)
+    elif datatype == 'integer64':
+        return EncodeInteger(value, '!Q')
     elif datatype == 'signed':
         return EncodeInteger(value, '!i')
     elif datatype == 'short':
@@ -76,6 +104,8 @@ def EncodeAttr(datatype, value):
         return EncodeInteger(value, 'B')
     elif datatype == 'date':
         return EncodeDate(value)
+    elif datatype == 'ipv6prefix':
+        return EncodeIPv6Prefix(value)
     else:
         raise ValueError('Unknown attribute type %s' % datatype)
 
@@ -89,6 +119,8 @@ def DecodeAttr(datatype, value):
         return DecodeAddress(value)
     elif datatype == 'integer':
         return DecodeInteger(value)
+    elif datatype == 'integer64':
+        return DecodeInteger(value, '!Q')
     elif datatype == 'signed':
         return DecodeInteger(value, '!i')
     elif datatype == 'short':
@@ -97,5 +129,7 @@ def DecodeAttr(datatype, value):
         return DecodeInteger(value, 'B')
     elif datatype == 'date':
         return DecodeDate(value)
+    elif datatype == 'ipv6prefix':
+        return DecodeIPv6Prefix(value)
     else:
         raise ValueError('Unknown attribute type %s' % datatype)
