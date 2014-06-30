@@ -89,6 +89,7 @@ class Server(host.Host):
 
         for addr in addresses:
             self.BindToAddress(addr)
+        self.running = True
 
     def BindToAddress(self, addr):
         """Add an address to listen to.
@@ -138,7 +139,8 @@ class Server(host.Host):
         :type  pkt: Packet class instance
         """
         if pkt.source[0] not in self.hosts:
-            raise ServerPacketError('Received packet from unknown host')
+            msg = 'Received packet from unknown host ({})'.format(pkt.source[0])
+            raise ServerPacketError(msg)
 
         pkt.secret = self.hosts[pkt.source[0]].secret
         if pkt.code != packet.AccessRequest:
@@ -224,6 +226,9 @@ class Server(host.Host):
                     s.CreateAcctPacket(packet=data), fd)
             self._HandleAcctPacket(pkt)
 
+    def Stop(self):
+        self.running = False
+
     def Run(self):
         """Main loop.
         This method is the main loop for a RADIUS server. It waits
@@ -234,8 +239,8 @@ class Server(host.Host):
         self._fdmap = {}
         self._PrepareSockets()
 
-        while 1:
-            for (fd, event) in self._poll.poll():
+        while self.running:
+            for (fd, event) in self._poll.poll(10):
                 if event == select.POLLIN:
                     try:
                         fdo = self._fdmap[fd]

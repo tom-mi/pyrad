@@ -145,7 +145,7 @@ class Packet(dict):
             return encoded_value
 
     def _EncodeKeyValues(self, key, values):
-        if not isinstance(key, str):
+        if not isinstance(key, six.string_types):
             return (key, values)
 
         attr = self.dict.attributes[key]
@@ -157,7 +157,7 @@ class Packet(dict):
         return (key, [self._EncodeValue(attr, v) for v in values])
 
     def _EncodeKey(self, key):
-        if not isinstance(key, str):
+        if not isinstance(key, six.string_types):
             return key
 
         attr = self.dict.attributes[key]
@@ -179,13 +179,14 @@ class Packet(dict):
         :param key:   attribute name or identification
         :type key:    string, attribute code or (vendor code, attribute code)
                       tuple
-        :param value: value
+        :param value: value or list of values
         :type value:  depends on type of attribute
         """
-        (key, value) = self._EncodeKeyValues(key, [value])
-        value = value[0]
-
-        self.setdefault(key, []).append(value)
+        if not isinstance(value, list):
+            value = [value]
+        (key, value) = self._EncodeKeyValues(key, value)
+        for v in value:
+            self.setdefault(key, []).append(v)
 
     def __getitem__(self, key):
         if not isinstance(key, six.string_types):
@@ -370,12 +371,12 @@ class AuthPacket(Packet):
         """
         Packet.__init__(self, code, id, secret, authenticator, **attributes)
 
-    def CreateReply(self, **attributes):
+    def CreateReply(self, code=AccessAccept, **attributes):
         """Create a new packet as a reply to this one. This method
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
-        return AuthPacket(AccessAccept, self.id,
+        return AuthPacket(code, self.id,
             self.secret, self.authenticator, dict=self.dict,
             **attributes)
 

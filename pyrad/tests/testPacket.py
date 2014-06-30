@@ -53,6 +53,10 @@ class PacketConstructionTests(unittest.TestCase):
         pkt = self.klass(dict=self.dict, Test_String='this works')
         self.assertEqual(pkt['Test-String'], ['this works'])
 
+    def testConstructorWithMultiValueAttribute(self):
+        pkt = self.klass(dict=self.dict, Test_String=['a', 'list'])
+        self.assertEqual(pkt['Test-String'], ['a', 'list'])
+
 
 class PacketTests(unittest.TestCase):
     def setUp(self):
@@ -353,6 +357,11 @@ class AuthPacketTests(unittest.TestCase):
         self.assertEqual(reply.authenticator, self.packet.authenticator)
         self.assertEqual(reply['Test-Integer'], [10])
 
+    def testCreateReject(self):
+        reply = self.packet.CreateReply(
+            code=packet.AccessReject, Test_Integer=10)
+        self.assertEqual(reply.code, packet.AccessReject)
+
     def testRequestPacket(self):
         self.assertEqual(self.packet.RequestPacket(),
                 six.b('\x01\x00\x00\x1401234567890ABCDE'))
@@ -391,16 +400,16 @@ class AuthPacketTests(unittest.TestCase):
         self.assertEqual(
             self.packet.TunnelPwDecrypt(
                 six.b('\x80\x01:i\x0bw\x84Ys!\x99X\x8f\xde\x80n\x14\xc2')),
-            six.u('test'))
+            six.b('test'))
         self.assertEqual(
             self.packet.TunnelPwDecrypt(
             six.b('\x80\x02\xdcb\xe9\x84\x01bf\x8f\x05G\xfe\xb4\x07\xe0(A'
                   '\x9ej\xcc\xb0:c\xe4\x9e\xad\r\xb79\xe8\xa2E~')),
-            six.u('verylongpassword'))
+            six.b('verylongpassword'))
         self.assertEqual(
             self.packet.TunnelPwDecrypt(
                 six.b('\x80\x03\x12(\xaeK\xc6[gq\x1ea\xd7700$\xdc')),
-            six.u('b\x01narytest'))
+            six.b('b\x01narytest'))
 
     def testPwCryptSetsAuthenticator(self):
         self.packet.authenticator = None
@@ -440,7 +449,7 @@ class TunnelPasswordTest(unittest.TestCase):
         self.packet = packet.AuthPacket(id=0, secret=six.b('secret'),
             authenticator=six.b('01234567890ABCDEF'), dict=self.dict)
         self.packet['Test-Tunnel-Pwd'] = \
-            (1, self.packet.TunnelPwCrypt('\x80\x01', 'test'))
+            (1, self.packet.TunnelPwCrypt(six.b('\x80\x01'), 'test'))
 
     def testEncryptedAttribute(self):
         '''Return encrypted tunnel password as bytestring.'''

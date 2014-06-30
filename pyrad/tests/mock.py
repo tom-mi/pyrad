@@ -84,7 +84,7 @@ class MockPoll:
     def register(self, fd, options):
         self.registry.append((fd, options))
 
-    def poll(self):
+    def poll(self, timeout=None):
         for result in self.results:
             yield result
         raise MockFinished

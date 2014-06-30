@@ -69,8 +69,8 @@ def DecodeIPv6Prefix(value):
     _, prefixlen = struct.unpack('BB', value[0:2])
     assert prefixlen <= 128
     if len(value[2:]) % 2 == 1:  # pad last incomplete block with zero
-        value += chr(0)
-    fmt = '!' + ('H' * (len(value[2:]) / 2))
+        value += six.b('\x00')
+    fmt = '!' + ('H' * (len(value[2:]) // 2))
     blocks = ['0'] * 8
     for index, block in enumerate(struct.unpack(fmt, value[2:])):
         blocks[index] = six.u('{:x}').format(block)

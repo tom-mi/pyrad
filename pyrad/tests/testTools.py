@@ -133,7 +133,7 @@ class EncodingTests(unittest.TestCase):
             tools.EncodeTaggedAttr('octets', 31, six.b('\x07\x08')),
             six.b('\x1F\x07\x08'))
         self.assertEqual(
-            tools.EncodeTaggedAttr('octets', 0, '\x02\x03\x05'),
+            tools.EncodeTaggedAttr('octets', 0, six.b('\x02\x03\x05')),
             six.b('\x00\x02\x03\x05'))
 
     def testEncodeFunction(self):
