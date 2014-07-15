@@ -29,6 +29,6 @@ setup(name='pyrad',
       zip_safe=True,
       include_package_data=True,
       install_requires=['six'],
-      tests_require='nose>=0.10.0b1',
+      tests_require=['nose>=0.10.0b1', 'mock'],
       test_suite='nose.collector',
       )

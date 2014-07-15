@@ -61,19 +61,24 @@ class Packet(dict):
     """
 
     def __init__(self, code=0, id=None, secret=six.b(''), authenticator=None,
-            **attributes):
+            auto_crypt=False, request=None, **attributes):
         """Constructor
 
-        :param dict:   RADIUS dictionary
-        :type dict:    pyrad.dictionary.Dictionary class
-        :param secret: secret needed to communicate with a RADIUS server
-        :type secret:  string
-        :param id:     packet identifaction number
-        :type id:      integer (8 bits)
-        :param code:   packet type code
-        :type code:    integer (8bits)
-        :param packet: raw packet to decode
-        :type packet:  string
+        :param dict:        RADIUS dictionary
+        :type dict:         pyrad.dictionary.Dictionary class
+        :param secret:      secret needed to communicate with a RADIUS server
+        :type secret:       string
+        :param id:          packet identifaction number
+        :type id:           integer (8 bits)
+        :param code:        packet type code
+        :type code:         integer (8bits)
+        :param packet:      raw packet to decode
+        :type packet:       string
+        :param auto_crypt:  Automatically de-/encode encrypted attributes. This
+                            is only relevant for AuthPackts.
+        :type auto_cryt:    boolean
+        :param request:     original request, if this instance is a response.
+        :type request:      pyrad.packet.Packet
         """
         dict.__init__(self)
         self.code = code
@@ -88,6 +93,8 @@ class Packet(dict):
                 not isinstance(authenticator, six.binary_type):
                     raise TypeError('authenticator must be a binary string')
         self.authenticator = authenticator
+        self.auto_crypt = auto_crypt
+        self.request = request
 
         if 'dict' in attributes:
             self.dict = attributes['dict']
@@ -101,6 +108,7 @@ class Packet(dict):
             key = key.replace('_', '-')
             self.AddAttribute(key, value)
 
+
     def CreateReply(self, **attributes):
         """Create a new packet as a reply to this one. This method
         makes sure the authenticator and secret are copied over
@@ -110,16 +118,22 @@ class Packet(dict):
                       authenticator=self.authenticator, dict=self.dict,
                       **attributes)
 
+    def _DecodeEncryptedValue(self, attr, value):
+        msg = ('Error decoding {}: {} does not support encrypted attributes'
+               .format(attr.name, self.__class__.__name__))
+        raise ValueError(msg)
+
     def _DecodeValue(self, attr, value):
         if attr.has_tag:
             # Remove tag prefix if present
             tag, value = tools.DecodeTaggedAttr(attr.type, value)
         if attr.values.HasBackward(value):
             decoded_value = attr.values.GetBackward(value)
-        elif attr.encrypt == 1:
-            decoded_value = tools.DecodeOctets(value)
-        elif attr.encrypt == 2:
-            decoded_value = tools.DecodeOctets(value)
+        elif attr.encrypt == 1 or attr.encrypt == 2:
+            if self.auto_crypt:
+                decoded_value = self._DecodeEncryptedValue(attr, value)
+            else:
+                decoded_value = tools.DecodeOctets(value)
         else:
             decoded_value = tools.DecodeAttr(attr.type, value)
         if attr.has_tag:
@@ -127,6 +141,10 @@ class Packet(dict):
         else:
             return decoded_value
 
+    def _EncodeEncryptedValue(self, attr, value):
+        msg = ('Error encoding {}: {} does not support encrypted attributes'
+               .format(attr.name, self.__class__.__name__))
+        raise ValueError(msg)
 
     def _EncodeValue(self, attr, value):
         if attr.has_tag:
@@ -136,6 +154,8 @@ class Packet(dict):
                 tag = 0x00
         if attr.values.HasForward(value):
             encoded_value = attr.values.GetForward(value)
+        elif (attr.encrypt == 1 or attr.encrypt == 2) and self.auto_crypt:
+            encoded_value = self._EncodeEncryptedValue(attr, value)
         else:
             encoded_value =  tools.EncodeAttr(attr.type, value)
         if attr.has_tag:
@@ -378,6 +398,7 @@ class AuthPacket(Packet):
         """
         return AuthPacket(code, self.id,
             self.secret, self.authenticator, dict=self.dict,
+            auto_crypt=self.auto_crypt, request=self,
             **attributes)
 
     def RequestPacket(self):
@@ -400,6 +421,40 @@ class AuthPacket(Packet):
             (20 + len(attr)), self.authenticator)
 
         return header + attr
+
+    def CreateSalt(self):
+        data = []
+        # Leftmost bit MUST be set to 1 (RFC 2868, section 3.5)
+        data.append(random_generator.randrange(128, 256))
+        data.append(random_generator.randrange(0, 256))
+        if six.PY3:
+            return bytes(data)
+        else:
+            return ''.join(chr(b) for b in data)
+
+    def _EncodeEncryptedValue(self, attr, value):
+        if attr.encrypt == 1:
+            return self.PwCrypt(value)
+        elif attr.encrypt == 2:
+            if self.request is not None:
+                return self.request.TunnelPwCrypt(self.CreateSalt(), value)
+            else:
+                raise ValueError('Cannot decode encrypted value without '
+                                 'original request.')
+        else:
+            raise NotImplementedError
+
+    def _DecodeEncryptedValue(self, attr, value):
+        if attr.encrypt == 1:
+            return self.PwDecrypt(value)
+        elif attr.encrypt == 2:
+            if self.request is not None:
+                return self.request.TunnelPwDecrypt(value)
+            else:
+                raise ValueError('Cannot decode encrypted value without '
+                                 'original request.')
+        else:
+            raise NotImplementedError
 
     def PwDecrypt(self, password):
         """Unobfuscate a RADIUS password. RADIUS hides passwords in packets by
@@ -496,7 +551,7 @@ class AuthPacket(Packet):
                                         block_cipher)
             last = self.secret + ciphertext[i*16:(i+1)*16]
         length = struct.unpack('B', plaintext[0:1])[0]
-        return plaintext[1:length+1]
+        return plaintext[1:length+1].decode('utf-8')
 
     def TunnelPwCrypt(self, salt, password):
         '''
@@ -524,7 +579,7 @@ class AuthPacket(Packet):
             ciphertext += tools.XorBytes(plaintext[i*16:(i+1)*16],
                                          block_cipher)
             last = self.secret + ciphertext[-16:]
-        return ciphertext
+        return salt + ciphertext
 
 
 class AcctPacket(Packet):
