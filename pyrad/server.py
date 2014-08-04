@@ -64,7 +64,7 @@ class Server(host.Host):
     MaxPacketSize = 8192
 
     def __init__(self, addresses=[], authport=1812, acctport=1813, hosts=None,
-            dict=None):
+            dict=None, auto_crypt=False):
         """Constructor.
 
         :param addresses: IP addresses to listen on
@@ -89,6 +89,7 @@ class Server(host.Host):
 
         for addr in addresses:
             self.BindToAddress(addr)
+        self.auto_crypt = auto_crypt
         self.running = True
 
     def BindToAddress(self, addr):
@@ -219,7 +220,8 @@ class Server(host.Host):
         """
         if fd.fileno() in self._realauthfds:
             pkt = self._GrabPacket(lambda data, s=self:
-                    s.CreateAuthPacket(packet=data), fd)
+                    s.CreateAuthPacket(packet=data,
+                                       auto_crypt=self.auto_crypt), fd)
             self._HandleAuthPacket(pkt)
         else:
             pkt = self._GrabPacket(lambda data, s=self:
