@@ -306,8 +306,27 @@ class Packet(dict):
 
     def _PktEncodeAttribute(self, key, value):
         if isinstance(key, tuple):
-            value = struct.pack('!L', key[0]) + \
-                self._PktEncodeAttribute(key[1], value)
+            vendor, type_ = key
+            type_len, length_len = self.dict.vendor_format[vendor]
+
+            # vendor id
+            header = struct.pack('!L', vendor)
+            # vendor-type
+            if type_len == 4:
+                header += struct.pack('!L', type_)
+            elif type_len == 2:
+                header += struct.pack('!H', type_)
+            elif type_len == 1:
+                header += struct.pack('!B', type_)
+            # vendor-length
+            if length_len == 2:
+                header += struct.pack('!H',
+                                          len(value) + type_len + length_len)
+            elif length_len == 1:
+                header += struct.pack('!B',
+                                          len(value) + type_len + length_len)
+
+            value = header + value
             key = 26
 
         return struct.pack('!BB', key, (len(value) + 2)) + value
@@ -326,12 +345,25 @@ class Packet(dict):
         if len(data) < 6:
             return (26, data)
 
-        (vendor, type, length) = struct.unpack('!LBB', data[:6])[0:3]
-        # Another sanity check
-        if len(data) != length + 4:
-            return (26, data)
+        vendor = struct.unpack('!L', data[0:4])[0]
+        type_len, length_len = self.dict.vendor_format[vendor]
+        if type_len == 1:
+            type_ = struct.unpack('!B', data[4:5])[0]
+        elif type_len == 2:
+            type_ = struct.unpack('!H', data[4:6])[0]
+        elif type_len == 4:
+            type_ = struct.unpack('!L', data[4:8])[0]
 
-        return ((vendor, type), data[6:])
+        # Length is not needed for decoding, but use do sanity check if present
+        if length_len == 1:
+            length = struct.unpack('!B', data[4+type_len:4+type_len+1])[0]
+        elif length_len == 2:
+            length = struct.unpack('!H', data[4+type_len:4+type_len+2])[0]
+        if length_len > 0:
+            if len(data) != length + 4:
+                return (26, data)
+
+        return ((vendor, type_), data[4+type_len+length_len:])
 
     def DecodePacket(self, packet):
         """Initialize the object from raw packet data.  Decode a packet as

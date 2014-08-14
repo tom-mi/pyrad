@@ -205,6 +205,21 @@ class PacketTests(unittest.TestCase):
                 self.packet._PktEncodeAttributes(),
                 six.b('\x1a\x0d\x00\x00\x00\x01\x02\x07value\x01\x07value'))
 
+    def testPktEncodeVendorAttributeWithFormat(self):
+        # Vendor Foo (0x11 = 17) has format=4,0
+        self.packet.clear()
+        self.packet[(17, 0xdeadbeef)] = [six.b('new-value')]
+        self.assertEqual(
+            self.packet._PktEncodeAttributes(),
+            six.b('\x1a\x13\x00\x00\x00\x11\xDE\xAD\xBE\xEFnew-value'))
+
+        # Vendor Bar (0x12 = 18) has format=1,2
+        self.packet.clear()
+        self.packet[(18, 1)] = [six.b('\x00\x00\x00\x42')]
+        self.assertEqual(
+            self.packet._PktEncodeAttributes(),
+            six.b('\x1a\x0D\x00\x00\x00\x12\x01\x00\x07\x00\x00\x00\x42'))
+
     def testPktDecodeVendorAttribute(self):
         decode = self.packet._PktDecodeVendorAttribute
 
@@ -221,6 +236,19 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(
                 decode(six.b('\x00\x00\x00\x01\x02\x07value')),
                 ((1, 2), six.b('value')))
+
+    def testPktDecodeVendorAttributeWithFormat(self):
+        decode = self.packet._PktDecodeVendorAttribute
+
+        # Vendor Foo (0x11 = 17) has format=4,0
+        self.assertEqual(
+            decode(six.b('\x00\x00\x00\x11\xDE\xAD\xBE\xEFspecial-value')),
+                ((17, 0xdeadbeef), six.b('special-value')))
+
+        # Vendor Bar (0x12 = 18) has format=1,2
+        self.assertEqual(
+            decode(six.b('\x00\x00\x00\x12\x01\x00\x07\x00\x00\x00\x42')),
+            ((18, 1), six.b('\x00\x00\x00\x42')))
 
     def testDecodePacketWithEmptyPacket(self):
         try:

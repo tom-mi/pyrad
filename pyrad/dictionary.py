@@ -71,6 +71,7 @@ from pyrad import bidict
 from pyrad import tools
 from pyrad import dictfile
 from copy import copy
+from collections import defaultdict
 
 DATATYPES = frozenset(['string', 'ipaddr', 'integer', 'integer64', 'signed',
                        'date', 'octets', 'abinary', 'tlv', 'ipv6addr',
@@ -146,6 +147,8 @@ class Dictionary(object):
         """
         self.vendors = bidict.BiDict()
         self.vendors.Add('', 0)
+        # default: format=1,1 (see FreeRADIUS dictionary Manpage)
+        self.vendor_format = defaultdict(lambda: (1, 1))
         self.attrindex = bidict.BiDict()
         self.attributes = {}
         self.defer_parse = []
@@ -252,8 +255,9 @@ class Dictionary(object):
                     file=state['file'],
                     line=state['line'])
 
-        # Parse format specification, but do
-        # nothing about it for now
+        (vendorname, vendor) = tokens[1:3]
+
+        # Parse format specification and add it to the vendor_format dict.
         if len(tokens) == 4:
             fmt = tokens[3].split('=')
             if fmt[0] != 'format':
@@ -268,6 +272,7 @@ class Dictionary(object):
                         'Unknown vendor format specification %s' % (fmt[1]),
                         file=state['file'],
                         line=state['line'])
+                self.vendor_format[int(vendor, 0)] = (t, l)
             except ValueError:
                 if fmt[1] != '1,1,c':
                     raise ParseError(
@@ -275,7 +280,6 @@ class Dictionary(object):
                         file=state['file'],
                         line=state['line'])
 
-        (vendorname, vendor) = tokens[1:3]
         self.vendors.Add(vendorname, int(vendor, 0))
 
     def __ParseBeginVendor(self, state, tokens):

@@ -192,6 +192,13 @@ class DictionaryParsingTests(unittest.TestCase):
                         'ATTRIBUTE Test-Type 1 integer Simplon'))
         self.assertEquals(self.dict.attrindex['Test-Type'], (42, 1))
 
+    def testVendorFormartParsing(self):
+        # Default value
+        self.assertEquals(self.dict.vendor_format[42], (1, 1))
+        # Parsing
+        self.dict.ReadDictionary(StringIO('VENDOR foo 43 format=4,0'))
+        self.assertEquals(self.dict.vendor_format[43], (4, 0))
+
     def testVendorOptionError(self):
         self.assertRaises(ParseError, self.dict.ReadDictionary,
                 StringIO('ATTRIBUTE Test-Type 1 integer Simplon'))
